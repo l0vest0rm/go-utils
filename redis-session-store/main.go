@@ -62,10 +62,10 @@ func NewRedisClusterStoreWithCli(cli *redis.ClusterClient, prefix ...string) ses
 }
 
 type clienter interface {
-	Get(key string) *redis.StringCmd
+	Get(ctx context.Context, key string) *redis.StringCmd
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
-	Expire(key string, expiration time.Duration) *redis.BoolCmd
-	Exists(keys ...string) *redis.IntCmd
+	Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd
+	Exists(ctx context.Context, keys ...string) *redis.IntCmd
 	TxPipeline() redis.Pipeliner
 	Del(ctx context.Context, keys ...string) *redis.IntCmd
 	Close() error
@@ -80,8 +80,8 @@ func (s *managerStore) getKey(key string) string {
 	return s.prefix + key
 }
 
-func (s *managerStore) getValue(sid string) (string, error) {
-	cmd := s.cli.Get(s.getKey(sid))
+func (s *managerStore) getValue(ctx context.Context, sid string) (string, error) {
+	cmd := s.cli.Get(ctx, s.getKey(sid))
 	if err := cmd.Err(); err != nil {
 		if err == redis.Nil {
 			return "", nil
@@ -108,14 +108,14 @@ func (s *managerStore) Create(ctx context.Context, sid string, expired int64) (s
 }
 
 func (s *managerStore) Update(ctx context.Context, sid string, expired int64) (session.Store, error) {
-	value, err := s.getValue(sid)
+	value, err := s.getValue(ctx, sid)
 	if err != nil {
 		return nil, err
 	} else if value == "" {
 		return newStore(ctx, s, sid, expired, nil), nil
 	}
 
-	cmd := s.cli.Expire(s.getKey(sid), time.Duration(expired)*time.Second)
+	cmd := s.cli.Expire(ctx, s.getKey(sid), time.Duration(expired)*time.Second)
 	if err = cmd.Err(); err != nil {
 		return nil, err
 	}
@@ -128,19 +128,19 @@ func (s *managerStore) Update(ctx context.Context, sid string, expired int64) (s
 	return newStore(ctx, s, sid, expired, values), nil
 }
 
-func (s *managerStore) Delete(_ context.Context, sid string) error {
+func (s *managerStore) Delete(ctx context.Context, sid string) error {
 	if ok, err := s.Check(nil, sid); err != nil {
 		return err
 	} else if !ok {
 		return nil
 	}
 
-	cmd := s.cli.Del(s.getKey(sid))
+	cmd := s.cli.Del(ctx, s.getKey(sid))
 	return cmd.Err()
 }
 
-func (s *managerStore) Check(_ context.Context, sid string) (bool, error) {
-	cmd := s.cli.Exists(s.getKey(sid))
+func (s *managerStore) Check(ctx context.Context, sid string) (bool, error) {
+	cmd := s.cli.Exists(ctx, s.getKey(sid))
 	if err := cmd.Err(); err != nil {
 		return false, err
 	}
@@ -148,7 +148,7 @@ func (s *managerStore) Check(_ context.Context, sid string) (bool, error) {
 }
 
 func (s *managerStore) Refresh(ctx context.Context, oldsid, sid string, expired int64) (session.Store, error) {
-	value, err := s.getValue(oldsid)
+	value, err := s.getValue(ctx, oldsid)
 	if err != nil {
 		return nil, err
 	} else if value == "" {
@@ -252,6 +252,6 @@ func (s *store) Save() error {
 	}
 	s.RUnlock()
 
-	cmd := s.ms.cli.Set(s.ms.getKey(s.sid), value, time.Duration(s.expired)*time.Second)
+	cmd := s.ms.cli.Set(s.ctx, s.ms.getKey(s.sid), value, time.Duration(s.expired)*time.Second)
 	return cmd.Err()
 }
