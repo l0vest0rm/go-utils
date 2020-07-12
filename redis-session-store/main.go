@@ -63,11 +63,11 @@ func NewRedisClusterStoreWithCli(cli *redis.ClusterClient, prefix ...string) ses
 
 type clienter interface {
 	Get(key string) *redis.StringCmd
-	Set(key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
 	Expire(key string, expiration time.Duration) *redis.BoolCmd
 	Exists(keys ...string) *redis.IntCmd
 	TxPipeline() redis.Pipeliner
-	Del(keys ...string) *redis.IntCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
 	Close() error
 }
 
@@ -156,9 +156,9 @@ func (s *managerStore) Refresh(ctx context.Context, oldsid, sid string, expired 
 	}
 
 	pipe := s.cli.TxPipeline()
-	pipe.Set(s.getKey(sid), value, time.Duration(expired)*time.Second)
-	pipe.Del(s.getKey(oldsid))
-	_, err = pipe.Exec()
+	pipe.Set(ctx, s.getKey(sid), value, time.Duration(expired)*time.Second)
+	pipe.Del(ctx, s.getKey(oldsid))
+	_, err = pipe.Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
