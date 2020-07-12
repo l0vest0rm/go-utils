@@ -1,4 +1,4 @@
-module github.com/l0vest0rm/go-utils/redis-session-store
+module github.com/l0vest0rm/go-utils
 
 go 1.14
 
